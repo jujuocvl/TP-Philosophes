@@ -1,0 +1,4 @@
+question 2
+Un "wait" intégré dans un while crée une boucle infinie
+
+question 1

@@ -1,66 +1,92 @@
+
 package diningphilosophers;
 
 import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class Philosopher extends Thread {
-    private final static int delai = 1000;
+public class Philosopher
+        extends Thread {
+
+    private static int seed = 1;
+    private final Random myRandom = new Random(System.currentTimeMillis() + seed++);
+    private final static int DELAY = 1000;
+    private final String myName;
     private final ChopStick myLeftStick;
     private final ChopStick myRightStick;
-    private boolean running = true;
+    private boolean jeContinue = true;
 
     public Philosopher(String name, ChopStick left, ChopStick right) {
-        super(name);
+        myName = name;
         myLeftStick = left;
         myRightStick = right;
     }
 
-    private void think() throws InterruptedException {
-        System.out.println("M."+this.getName()+" pense... ");
-        sleep(delai+new Random().nextInt(delai+1));
-        System.out.println("M."+this.getName()+" arrête de penser");
-    }
-
-    private void eat() throws InterruptedException {
-        System.out.println("M."+this.getName() + " mange...");
-        sleep(delai+new Random().nextInt(delai+1));
-        //System.out.println("M."+this.getName()+" arrête de manger");
-    }
-
     @Override
     public void run() {
-        while (running) {
+        while (jeContinue) {
             try {
                 think();
-                // Aléatoirement prendre la baguette de gauche puis de droite ou l'inverse
-                switch(new Random().nextInt(2)) {
-                    case 0:
-                        myLeftStick.take();
-                        think(); // pour augmenter la probabilité d'interblocage
-                        myRightStick.take();
-                        break;
-                    case 1:
-                        myRightStick.take();
-                        think(); // pour augmenter la probabilité d'interblocage
-                        myLeftStick.take();
+                // 2-Step locking protocol
+                // 1st step : try to get resources
+                if (tryTakeStick(myLeftStick)) {
+                    if (tryTakeStick(myRightStick)) {
+                        // success : process
+                        eat();
+                        // release resources
+                        releaseStick(myLeftStick);
+                        releaseStick(myRightStick);
+                    } else {
+                        // failure : release resources
+                        releaseStick(myLeftStick);
+                    }
                 }
-                // Si on arrive ici, on a pu "take" les 2 baguettes
-                eat();
-                // On libère les baguettes :
-                myLeftStick.release();
-                myRightStick.release();
                 // try again
             } catch (InterruptedException ex) {
                 Logger.getLogger("Table").log(Level.SEVERE, "{0} Interrupted", this.getName());
             }
         }
+        System.out.println("M " + myName + " quitte la table");
+
     }
 
-    // Permet d'interrompre le philosophe "proprement" :
-    // Il relachera ses baguettes avant de s'arrêter
     public void leaveTable() {
-        running = false;
+        jeContinue = false;
     }
 
+    private boolean tryTakeStick(ChopStick stick) throws InterruptedException {
+        int delay = myRandom.nextInt(100 + DELAY);
+        boolean result = stick.tryTake(delay);
+        if (result) {
+            System.out.println("M " + myName + " prend la " + stick + " avant " + delay + " ms");
+        } else {
+            System.out.println("M " + myName + " ne peut pas prendre la " + stick + " avant " + delay + " ms");
+        }
+        return result;
+    }
+
+    private void releaseStick(ChopStick stick) {
+        stick.release();
+        System.out.println("M " + myName + " relâche la " + stick);
+    }
+
+    private void think() {
+        int delay = myRandom.nextInt(100 + DELAY);
+        System.out.println("M " + myName + " commence à penser " + delay + " ms");
+        try {
+            sleep(delay);
+        } catch (InterruptedException ex) {
+        }
+        System.out.println("M " + myName + " arrête de penser");
+    }
+
+    private void eat() {
+        int delay = myRandom.nextInt(100 + DELAY);
+        System.out.println("M " + myName + " commence à manger " + delay + " ms");
+        try {
+            sleep(delay);
+        } catch (InterruptedException ex) {
+        }
+        System.out.println("M " + myName + " arrête de manger");
+    }
 }
